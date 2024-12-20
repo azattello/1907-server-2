@@ -1,5 +1,6 @@
 const Router = require("express");
 const User = require("../models/User") 
+const Filial = require('../models/Filial');
 // const bcrypt = require("bcryptjs")
 const config = require("config")
 const jwt = require("jsonwebtoken")
@@ -8,12 +9,10 @@ const authMiddleware = require('../middleware/auth.middleware')
 
 const router = new Router()
 
-
-// registration router
 router.post('/registration', 
     [
         check('phone', 'Неверный номер телефона').not().isEmpty(),
-        check('password', 'Неверный пароль').isLength({min: 4, max: 20}),
+        check('password', 'Неверный пароль').isLength({ min: 4, max: 20 }),
         check('name', 'Имя обязательно для заполнения').not().isEmpty(),
         check('surname', 'Фамилия обязательна для заполнения').not().isEmpty(),
         check('selectedFilial', 'Филиал обязателен для заполнения').not().isEmpty(),
@@ -21,7 +20,7 @@ router.post('/registration',
     ],
     async (req, res) => {
     try {
-        console.log(req.body)
+        console.log(req.body);
 
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
@@ -30,18 +29,24 @@ router.post('/registration',
             return res.status(400).json({ message: firstError });
         }
 
-        const { phone, password, name, surname, referrer, selectedFilial} = req.body;
-        
+        const { phone, password, name, surname, referrer, selectedFilial } = req.body;
+
         const candidate = await User.findOne({ phone });
         if (candidate) {
             return res.status(400).json({ message: 'Пользователь с таким номером телефона уже существует' });
         }
 
-        // Получаем количество пользователей в коллекции User
-        const userCount = await User.countDocuments();
+        // Находим филиал по переданному имени (selectedFilial)
+        const filial = await Filial.findOne({ filialText: selectedFilial });
+        if (!filial) {
+            return res.status(404).json({ message: 'Указанный филиал не найден' });
+        }
 
-        // Присваиваем новый личный идентификатор, равный количеству пользователей + 1
-        const personalId = userCount + 1;
+        // Получаем количество пользователей, зарегистрированных в этом филиале
+        const userCount = await User.countDocuments({ selectedFilial });
+
+        // Присваиваем новый личный идентификатор в формате "filialId-01"
+        const personalId = `${filial.filialId}-${String(userCount + 1).padStart(2, '0')}`;
 
         // Создание нового пользователя
         const user = new User({
@@ -64,6 +69,7 @@ router.post('/registration',
         res.status(500).send({ message: "Server error" });
     }
 });
+
 
 
 
